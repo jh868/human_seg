@@ -89,7 +89,7 @@ class MobileUNet(nn.Module):
         self.D_irb4 = self.irb_bottleneck(24, 16, 1, 2, 6, True)
         self.DConv4x4 = nn.ConvTranspose2d(16, 16, 4, 2, 1, groups=16, bias=False)
         # Final layer: output channel number can be changed as per the usecase
-        self.conv1x1_decode = nn.Conv2d(16, 3, kernel_size=1, stride=1)
+        self.conv1x1_decode = nn.Conv2d(16, 1, kernel_size=1, stride=1)  # 출력 채널 1
 
     def depthwise_conv(self, in_c, out_c, k=3, s=1, p=0):
         """
@@ -143,6 +143,8 @@ class MobileUNet(nn.Module):
         d4 = self.D_irb4(d3) + x2
         d5 = self.DConv4x4(d4)
         out = self.conv1x1_decode(d5)
+
+        out = out.squeeze()  # 채널 제거
 
         return out
 

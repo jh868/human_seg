@@ -12,16 +12,16 @@ img_path = glob.glob(os.path.join(dir_img, '*.jpg'))
 label_path = glob.glob(os.path.join(dir_label, '*.png'))
 
 # mask 이미지
-os.makedirs('D:seg/mask', exist_ok=True)
-
-for i in label_path:
-    name = i.split('\\')[-1].split('.')[0]
-    rgba_image = cv2.imread(i, cv2.IMREAD_UNCHANGED)
-    alpha = rgba_image[:, :, 3]
-    cv2.imwrite(f'D:seg/mask/{name}.png', alpha)
-    # print(rgba_image.shape)
-    # plt.imshow(alpha)
-    # plt.show()
+# os.makedirs('D:seg/mask', exist_ok=True)
+#
+# for i in label_path:
+#     name = i.split('\\')[-1].split('.')[0]
+#     rgba_image = cv2.imread(i, cv2.IMREAD_UNCHANGED)
+#     alpha = rgba_image[:, :, 3]
+#     cv2.imwrite(f'D:seg/mask/{name}.png', alpha)
+#     print(rgba_image.shape)
+#     plt.imshow(alpha)
+#     plt.show()
 
 # 누락 파일 제거
 # img_paths = sorted(img_path)

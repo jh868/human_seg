@@ -52,7 +52,7 @@ class Human(Dataset):
             Y_train = Image.open(self.Y_train[i])
             Y_train = self.preprocessing_mask(Y_train)
 
-            print(X_train.shape, Y_train.shape)
+            # print(X_train.shape, Y_train.shape)
 
             return X_train, Y_train
 
@@ -61,6 +61,7 @@ class Human(Dataset):
             X_test = self.transform(X_test)
             Y_test = Image.open(self.Y_test[i])
             Y_test = self.preprocessing_mask(Y_test)
+
 
             return X_test, Y_test
 
@@ -100,5 +101,8 @@ for epoch in range(300):
         optim.step()
 
         iterator.set_description(f'epoch: {epoch + 1} loss: {loss.item()}')
+
+    if (epoch+1) % 10 == 0:
+        torch.save(model.state_dict(), f'Human_segmentation_{epoch+1}.pth')
 
 torch.save(model.state_dict(), 'Human_segmentation.pth')
