@@ -1,5 +1,6 @@
 import glob
 
+import cv2
 import numpy as np
 import torch
 from torch.utils.data.dataset import Dataset
@@ -62,7 +63,6 @@ class Human(Dataset):
             Y_test = Image.open(self.Y_test[i])
             Y_test = self.preprocessing_mask(Y_test)
 
-
             return X_test, Y_test
 
 
@@ -73,36 +73,66 @@ transform = Compose([
     ToTensor()
 ])
 
-train_set = Human(path_to_img='D:seg/image/',
-                  path_to_anno='D:seg/mask/',
+train_set = Human(path_to_img='./seg/image/',
+                  path_to_anno='./seg/mask/',
                   transfrom=transform)
-test_set = Human(path_to_img='D:seg/image/',
-                 path_to_anno='D:seg/mask/',
+test_set = Human(path_to_img='./seg/image/',
+                 path_to_anno='./seg/mask/',
                  transfrom=transform,
                  train=False)
 
 train_loader = DataLoader(train_set, batch_size=16, shuffle=True)
 test_loader = DataLoader(test_set)
 
+# model = MobileUNet().to(device)
+#
+# lr = 0.0001
+#
+# optim = Adam(params=model.parameters(), lr=lr)
+
+# for epoch in range(300):
+#     iterator = tqdm.tqdm(train_loader)
+#     for data, label in iterator:
+#         optim.zero_grad()
+#
+#         preds = model(data.to(device))
+#         loss = nn.BCEWithLogitsLoss()(preds, label.type(torch.FloatTensor).to(device))
+#         loss.backward()
+#         optim.step()
+#
+#         iterator.set_description(f'epoch: {epoch + 1} loss: {loss.item()}')
+#
+#     if (epoch+1) % 10 == 0:
+#         torch.save(model.state_dict(), f'Human_segmentation_{epoch+1}.pth')
+#
+# torch.save(model.state_dict(), 'Human_segmentation.pth')
+
 model = MobileUNet().to(device)
 
-lr = 0.0001
+model.load_state_dict(torch.load('Human_segmentation_120.pth', map_location='cpu'))
 
-optim = Adam(params=model.parameters(), lr=lr)
+import matplotlib.pyplot as plt
 
-for epoch in range(300):
-    iterator = tqdm.tqdm(train_loader)
-    for data, label in iterator:
-        optim.zero_grad()
+data, label = test_set[1]
+pred = model(torch.unsqueeze(data.to(device), dim=0)) > 0.5
 
-        preds = model(data.to(device))
-        loss = nn.BCEWithLogitsLoss()(preds, label.type(torch.FloatTensor).to(device))
-        loss.backward()
-        optim.step()
+mask = pred.cpu().detach().numpy()  # tensor -> numpy
 
-        iterator.set_description(f'epoch: {epoch + 1} loss: {loss.item()}')
+mask = np.where(mask > 0.5, 1, 0)
 
-    if (epoch+1) % 10 == 0:
-        torch.save(model.state_dict(), f'Human_segmentation_{epoch+1}.pth')
+data = np.transpose(data, (1, 2, 0))  # (3, 256, 256) -> (256, 256, 3)
 
-torch.save(model.state_dict(), 'Human_segmentation.pth')
+masked_img = np.multiply(data.cpu().detach().numpy(), np.repeat(mask[:, :, np.newaxis], 3, axis=2))
+
+cv2.imshow('Masked Image', masked_img)
+cv2.waitKey(0)
+
+
+# with torch.no_grad():
+#     plt.subplot(1, 2, 1)
+#     plt.title('predicted')
+#     plt.imshow(pred.cpu())
+#     plt.subplot(1, 2, 2)
+#     plt.title('real')
+#     plt.imshow(label)
+#     plt.show()
