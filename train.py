@@ -41,7 +41,7 @@ class Human(Dataset):
             # return len(self.X_test)
 
     def preprocessing_mask(self, mask):
-        mask = mask.resize(self.input_size)
+        # mask = mask.resize(self.input_size)
         mask = self.transform(mask)
         mask = np.array(mask).astype(np.float32)
 
@@ -72,8 +72,8 @@ transform = Compose([
     ToTensor()
 ])
 
-train_set = Human(path_to_img='D:seg/image/',
-                  path_to_anno='D:seg/mask/',
+train_set = Human(path_to_img='./seg/image/',
+                  path_to_anno='./seg/mask/',
                   transfrom=transform)
 test_set = Human(path_to_img='D:seg/image/',
                  path_to_anno='D:seg/mask/',
@@ -89,26 +89,26 @@ lr = 0.0001
 
 optim = Adam(params=model.parameters(), lr=lr)
 
-for epoch in range(200):
-    iterator = tqdm.tqdm(train_loader)
-    for data, label in iterator:
-        optim.zero_grad()
+# for epoch in range(200):
+#     iterator = tqdm.tqdm(train_loader)
+#     for data, label in iterator:
+#         optim.zero_grad()
+#
+#         preds = model(data.to(device))
+#         loss = nn.BCEWithLogitsLoss()(preds, label.type(torch.FloatTensor).to(device))
+#         loss.backward()
+#         optim.step()
+#
+#         iterator.set_description(f'epoch: {epoch + 1} loss: {loss.item()}')
+#
+#     if (epoch+1) % 10 == 0:
+#         torch.save(model.state_dict(), f'Human_seg_transform_{epoch+1}.pth')
+#
+# torch.save(model.state_dict(), 'Human_segmentation.pth')
 
-        preds = model(data.to(device))
-        loss = nn.BCEWithLogitsLoss()(preds, label.type(torch.FloatTensor).to(device))
-        loss.backward()
-        optim.step()
+model.load_state_dict(torch.load('Human_seg_transform_10.pth', map_location='cpu'))
 
-        iterator.set_description(f'epoch: {epoch + 1} loss: {loss.item()}')
-
-    if (epoch+1) % 10 == 0:
-        torch.save(model.state_dict(), f'Human_seg_transform_{epoch+1}.pth')
-
-torch.save(model.state_dict(), 'Human_segmentation.pth')
-
-model.load_state_dict(torch.load('Human_segmentation_120.pth', map_location='cpu'))
-
-data, label = test_set[1]
+data, label = train_set[0]
 pred = model(torch.unsqueeze(data.to(device), dim=0)) > 0.5
 
 mask = pred.cpu().detach().numpy()  # tensor -> numpy
@@ -124,11 +124,11 @@ cv2.waitKey(0)
 
 import matplotlib.pyplot as plt
 
-# with torch.no_grad():
-#     plt.subplot(1, 2, 1)
-#     plt.title('predicted')
-#     plt.imshow(pred.cpu())
-#     plt.subplot(1, 2, 2)
-#     plt.title('real')
-#     plt.imshow(label)
-#     plt.show()
+with torch.no_grad():
+    plt.subplot(1, 2, 1)
+    plt.title('predicted')
+    plt.imshow(pred.cpu())
+    plt.subplot(1, 2, 2)
+    plt.title('real')
+    plt.imshow(label)
+    plt.show()
