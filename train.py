@@ -1,5 +1,6 @@
 import glob
 
+import matplotlib.pyplot as plt
 import numpy as np
 import torch
 from torch.utils.data.dataset import Dataset
@@ -7,8 +8,8 @@ from PIL import Image
 import tqdm
 import torch.nn as nn
 
-from torchvision.transforms import Compose
-from torchvision.transforms import ToTensor, Resize, RandomHorizontalFlip, RandomVerticalFlip, RandomRotation, RandomCrop
+import albumentations as A
+from albumentations.pytorch.transforms import ToTensorV2
 from torch.optim.adam import Adam
 from torch.utils.data.dataloader import DataLoader
 import cv2
@@ -17,34 +18,26 @@ from model import MobileUNet
 
 
 class Human(Dataset):
-    def __init__(self, path_to_img, path_to_anno, train=True, transfrom=None, transform_label=None):
+    def __init__(self, path_to_img, path_to_anno, train=True, transfrom=None, input_size=(256, 256)):
         self.images = sorted(glob.glob(path_to_img + '/*.jpg'))
         self.annotations = sorted(glob.glob(path_to_anno + '/*.png'))
 
-        # self.X_train = self.images[:int(0.9 * len(self.images))]
-        # self.X_test = self.images[int(0.9 * len(self.images)):]
-        # self.Y_train = self.annotations[:int(0.9 * len(self.annotations))]
-        # self.Y_test = self.annotations[int(0.9 * len(self.annotations)):]
-        #
         self.X_train = self.images[:]
         self.Y_train = self.annotations[:]
 
-
         self.train = train
         self.transform = transfrom
-        self.transform_label = transform_label
-        # self.input_size = input_size
+        self.input_size = input_size
 
     def __len__(self):
         if self.train:
             return len(self.X_train)
         # else:
-            # return len(self.X_test)
+        # return len(self.X_test)
 
     def preprocessing_mask(self, mask):
-        # mask = mask.resize(self.input_size)
-        mask = self.transform_label(mask)
-        mask = np.array(mask).astype(np.float32)
+        mask = mask.resize(self.input_size)
+        mask = mask.astype(np.float32)
 
         mask[mask < 255] = 0
         mask[mask == 255.0] = 1
@@ -54,44 +47,28 @@ class Human(Dataset):
         return mask
 
     def __getitem__(self, i):
-        X_train = Image.open(self.X_train[i])
-        X_train = self.transform(X_train)
-        Y_train = Image.open(self.Y_train[i])
+        X_train = cv2.imread(self.X_train[i])
+        X_train = X_train.astype(np.float32)
+        X_train = self.transform(image=X_train)['image']
+        Y_train = cv2.imread(self.Y_train[i], cv2.IMREAD_UNCHANGED)
         Y_train = self.preprocessing_mask(Y_train)
-
 
         return X_train, Y_train
 
 
-
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
-transform = Compose([
-    Resize((256, 256)),
-    RandomRotation(180),
-    RandomVerticalFlip(),
-    RandomHorizontalFlip(),
-    ToTensor()
+transform = A.Compose([
+    A.Resize(width=256, height=256),
+    ToTensorV2()
 ])
 
-transform_label = Compose([
-    Resize((256, 256)),
-    RandomRotation(180),
-    RandomVerticalFlip(),
-    RandomHorizontalFlip()
-])
-
-train_set = Human(path_to_img='D:seg/image/',
-                  path_to_anno='D:seg/mask/',
+train_set = Human(path_to_img='./seg/image/',
+                  path_to_anno='./seg/mask/',
                   transfrom=transform,
-                  transform_label=transform_label)
-test_set = Human(path_to_img='D:seg/image/',
-                 path_to_anno='D:seg/mask/',
-                 transfrom=transform,
-                 train=False)
+                  )
 
 train_loader = DataLoader(train_set, batch_size=64, shuffle=True)
-test_loader = DataLoader(test_set)
 
 model = MobileUNet().to(device)
 
@@ -99,46 +76,88 @@ lr = 0.0001
 
 optim = Adam(params=model.parameters(), lr=lr)
 
-for epoch in range(200):
-    iterator = tqdm.tqdm(train_loader)
-    for data, label in iterator:
-        optim.zero_grad()
+# for epoch in range(200):
+#     iterator = tqdm.tqdm(train_loader)
+#     for data, label in iterator:
+#         optim.zero_grad()
+#
+#         preds = model(data.to(device))
+#         loss = nn.BCEWithLogitsLoss()(preds, label.type(torch.FloatTensor).to(device))
+#         loss.backward()
+#         optim.step()
+#
+#         iterator.set_description(f'epoch: {epoch + 1} loss: {loss.item()}')
+#
+#     if (epoch+1) % 10 == 0:
+#         torch.save(model.state_dict(), f'Human_seg_transform_{epoch+1}.pth')
+#
+# torch.save(model.state_dict(), 'Human_segmentation.pth')
 
-        preds = model(data.to(device))
-        loss = nn.BCEWithLogitsLoss()(preds, label.type(torch.FloatTensor).to(device))
-        loss.backward()
-        optim.step()
+model.load_state_dict(torch.load('Human_seg_full_50.pth', map_location='cpu'))
 
-        iterator.set_description(f'epoch: {epoch + 1} loss: {loss.item()}')
+img_path = './seg/image/1803151818-00000003.jpg'
 
-    if (epoch+1) % 10 == 0:
-        torch.save(model.state_dict(), f'Human_seg_transform_{epoch+1}.pth')
+img = cv2.imread(img_path, cv2.IMREAD_UNCHANGED)
 
-torch.save(model.state_dict(), 'Human_segmentation.pth')
+img_copy = cv2.resize(img, (256, 256))
 
-model.load_state_dict(torch.load('Human_seg_transform_10.pth', map_location='cpu'))
+img_copy2 = np.transpose(img_copy, (2, 1, 0))
+img_copy2 = torch.unsqueeze(torch.tensor(img_copy2), 0)
 
-data, label = train_set[0]
-pred = model(torch.unsqueeze(data.to(device), dim=0)) > 0.5
+pred = model(img_copy2.float())
+pred = pred.detach().numpy()
+pred = pred.astype(np.uint8)
+print("pred = ", pred.shape)
 
-mask = pred.cpu().detach().numpy()  # tensor -> numpy
+_, mask = cv2.threshold(pred, 200, 255, cv2.THRESH_BINARY)
+mask = cv2.bitwise_not(mask)  # 반전
 
-mask = np.where(mask > 0.5, 1, 0)
+# cv2로 투명배경 멕이기 # 근데 생각해보니까 투명 배경할 이유가없음
+mask = cv2.merge((mask, mask, mask))
+result = cv2.addWeighted(img_copy, 1, mask, 1, 0)
 
-data = np.transpose(data, (1, 2, 0))  # (3, 256, 256) -> (256, 256, 3)
+b, g, r = cv2.split(img_copy)
+result = cv2.merge([b, g, r, pred], 4)
+print("result= ", result.shape)
 
-masked_img = np.multiply(data.cpu().detach().numpy(), np.repeat(mask[:, :, np.newaxis], 3, axis=2))
-
-cv2.imshow('Masked Image', masked_img)
+cv2.imwrite('result.png', result)
+cv2.imshow(' ', result)
 cv2.waitKey(0)
 
-import matplotlib.pyplot as plt
+# 배경관련
+fg_h, fg_w, _ = img.shape
 
-with torch.no_grad():
-    plt.subplot(1, 2, 1)
-    plt.title('predicted')
-    plt.imshow(pred.cpu())
-    plt.subplot(1, 2, 2)
-    plt.title('real')
-    plt.imshow(label)
-    plt.show()
+background = cv2.imread('background.jpg')
+
+bg_h, bg_w, _ = background.shape
+
+# fit to fg width
+background = cv2.resize(background, dsize=(fg_w, int(fg_w * bg_h / bg_w)))
+
+bg_h, bg_w, _ = background.shape
+
+margin = (bg_h - fg_h) // 2
+
+if margin > 0:
+    background = background[margin:-margin, :, :]
+else:
+    background = cv2.copyMakeBorder(background, top=abs(margin), bottom=abs(margin), left=0, right=0,
+                                    borderType=cv2.BORDER_REPLICATE)
+
+# final resize
+background = cv2.resize(background, dsize=(fg_w, fg_h))
+
+cv2.imshow("", background)
+cv2.waitKey(0)
+
+# 넣기
+mask = cv2.resize(mask, (fg_w, fg_h))
+
+print(background.shape)
+print(img.shape)
+print(mask.shape)
+
+cv2.copyTo(img, mask, background)
+
+cv2.imshow("", background)
+cv2.waitKey(0)
