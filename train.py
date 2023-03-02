@@ -1,10 +1,7 @@
 import glob
-
-import matplotlib.pyplot as plt
 import numpy as np
 import torch
 from torch.utils.data.dataset import Dataset
-from PIL import Image
 import tqdm
 import torch.nn as nn
 
@@ -18,7 +15,7 @@ from model import MobileUNet
 
 
 class Human(Dataset):
-    def __init__(self, path_to_img, path_to_anno, train=True, transfrom=None, input_size=(256, 256)):
+    def __init__(self, path_to_img, path_to_anno, train=True, transfrom=None, transform_mask=None):
         self.images = sorted(glob.glob(path_to_img + '/*.jpg'))
         self.annotations = sorted(glob.glob(path_to_anno + '/*.png'))
 
@@ -27,7 +24,8 @@ class Human(Dataset):
 
         self.train = train
         self.transform = transfrom
-        self.input_size = input_size
+        self.transform_mask = transform_mask
+        # self.input_size = input_size
 
     def __len__(self):
         if self.train:
@@ -36,7 +34,9 @@ class Human(Dataset):
         # return len(self.X_test)
 
     def preprocessing_mask(self, mask):
-        mask = mask.resize(self.input_size)
+        # mask = mask.resize(self.input_size)
+        # mask = np.resize(mask, self.input_size)
+        mask = self.transform_mask(image=mask)['image']
         mask = mask.astype(np.float32)
 
         mask[mask < 255] = 0
@@ -50,7 +50,7 @@ class Human(Dataset):
         X_train = cv2.imread(self.X_train[i])
         X_train = X_train.astype(np.float32)
         X_train = self.transform(image=X_train)['image']
-        Y_train = cv2.imread(self.Y_train[i], cv2.IMREAD_UNCHANGED)
+        Y_train = cv2.imread(self.Y_train[i], cv2.IMREAD_GRAYSCALE)
         Y_train = self.preprocessing_mask(Y_train)
 
         return X_train, Y_train
@@ -60,12 +60,18 @@ device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 transform = A.Compose([
     A.Resize(width=256, height=256),
+    A.HorizontalFlip(),
     ToTensorV2()
 ])
+transform_mask = A.Compose([
+    A.Resize(width=256, height=256),
+    A.HorizontalFlip()
+])
 
-train_set = Human(path_to_img='./seg/image/',
-                  path_to_anno='./seg/mask/',
+train_set = Human(path_to_img='D:seg/image/',
+                  path_to_anno='D:seg/mask/',
                   transfrom=transform,
+                  transform_mask=transform_mask
                   )
 
 train_loader = DataLoader(train_set, batch_size=64, shuffle=True)
@@ -76,22 +82,40 @@ lr = 0.0001
 
 optim = Adam(params=model.parameters(), lr=lr)
 
-# for epoch in range(200):
-#     iterator = tqdm.tqdm(train_loader)
-#     for data, label in iterator:
-#         optim.zero_grad()
-#
-#         preds = model(data.to(device))
-#         loss = nn.BCEWithLogitsLoss()(preds, label.type(torch.FloatTensor).to(device))
-#         loss.backward()
-#         optim.step()
-#
-#         iterator.set_description(f'epoch: {epoch + 1} loss: {loss.item()}')
-#
-#     if (epoch+1) % 10 == 0:
-#         torch.save(model.state_dict(), f'Human_seg_transform_{epoch+1}.pth')
-#
-# torch.save(model.state_dict(), 'Human_segmentation.pth')
+# 가중치만 불러오기
+# model.load_state_dict(torch.load('./Human_seg_full_50.pth'), strict=False)
+
+# load checkpoint
+# checkpoint = torch.load('./checkpoint.tar')
+# model.load_state_dict(checkpoint['model_state_dict'])
+# optim.load_state_dict(checkpoint['optimizer_state_dict'])
+# epoch = checkpoint['epoch']
+
+for epoch in range(200):
+    iterator = tqdm.tqdm(train_loader)
+    for data, label in iterator:
+        optim.zero_grad()
+
+        preds = model(data.to(device))
+        loss = nn.BCEWithLogitsLoss()(preds, label.type(torch.FloatTensor).to(device))
+        loss.backward()
+        optim.step()
+
+        iterator.set_description(f'epoch: {epoch + 1} loss: {loss.item()}')
+
+# save checkpoint
+    if (epoch+1) % 10 == 0:
+        torch.save({
+            'model_state_dict': model.state_dict(),
+            'optimizer_state_dict': optim.state_dict(),
+            'epoch': epoch
+        }, f'Portrait_seg_{epoch+1}.pth')
+
+torch.save({
+            'model_state_dict': model.state_dict(),
+            'optimizer_state_dict': optim.state_dict(),
+            'epoch': 200
+        }, 'Portrait_segmentation.pth')
 
 model.load_state_dict(torch.load('Human_seg_full_50.pth', map_location='cpu'))
 
@@ -101,7 +125,7 @@ img = cv2.imread(img_path, cv2.IMREAD_UNCHANGED)
 
 img_copy = cv2.resize(img, (256, 256))
 
-img_copy2 = np.transpose(img_copy, (2, 1, 0))
+img_copy2 = np.transpose(img_copy, (2, 0, 1))
 img_copy2 = torch.unsqueeze(torch.tensor(img_copy2), 0)
 
 pred = model(img_copy2.float())
