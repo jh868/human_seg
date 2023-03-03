@@ -61,11 +61,15 @@ device = 'cuda' if torch.cuda.is_available() else 'cpu'
 transform = A.Compose([
     A.Resize(width=256, height=256),
     A.HorizontalFlip(),
+    A.RandomShadow(),
+    A.RandomBrightnessContrast(),
+    A.RandomCrop(192, 192),
     ToTensorV2()
 ])
 transform_mask = A.Compose([
     A.Resize(width=256, height=256),
-    A.HorizontalFlip()
+    A.HorizontalFlip(),
+    A.RandomCrop(192, 192),
 ])
 
 train_set = Human(path_to_img='D:seg/image/',
@@ -74,11 +78,11 @@ train_set = Human(path_to_img='D:seg/image/',
                   transform_mask=transform_mask
                   )
 
-train_loader = DataLoader(train_set, batch_size=64, shuffle=True)
+train_loader = DataLoader(train_set, batch_size=120, shuffle=True)
 
 model = MobileUNet().to(device)
 
-lr = 0.0001
+lr = 0.001
 
 optim = Adam(params=model.parameters(), lr=lr)
 
@@ -104,7 +108,7 @@ for epoch in range(200):
         iterator.set_description(f'epoch: {epoch + 1} loss: {loss.item()}')
 
 # save checkpoint
-    if (epoch+1) % 10 == 0:
+    if (epoch+1) % 5 == 0:
         torch.save({
             'model_state_dict': model.state_dict(),
             'optimizer_state_dict': optim.state_dict(),
@@ -137,8 +141,8 @@ _, mask = cv2.threshold(pred, 200, 255, cv2.THRESH_BINARY)
 mask = cv2.bitwise_not(mask)  # 반전
 
 # cv2로 투명배경 멕이기 # 근데 생각해보니까 투명 배경할 이유가없음
-mask = cv2.merge((mask, mask, mask))
-result = cv2.addWeighted(img_copy, 1, mask, 1, 0)
+# mask = cv2.merge((mask, mask, mask))
+# result = cv2.addWeighted(img_copy, 1, mask, 1, 0)
 
 b, g, r = cv2.split(img_copy)
 result = cv2.merge([b, g, r, pred], 4)
