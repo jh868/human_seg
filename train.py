@@ -93,6 +93,7 @@ optim = Adam(params=model.parameters(), lr=lr)
 # optim.load_state_dict(checkpoint['optimizer_state_dict'])
 # epoch = checkpoint['epoch']
 
+# train
 for epoch in range(200):
     iterator = tqdm.tqdm(train_loader)
     for data, label in iterator:
