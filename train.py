@@ -25,7 +25,6 @@ class Human(Dataset):
 
         self.train = train
         self.transform = transfrom
-        self.transform_mask = transform_mask
         # self.input_size = input_size
 
     def __len__(self):
