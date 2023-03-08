@@ -36,13 +36,16 @@ def padding(img, set_size):
 
     return new_img
 
-path = ''
-save_path = ''
+path = 'D:seg/'
+save_path = 'D:seg_pad/mask/'
 
-image_path = glob.glob(os.path.join())
+image_path = glob.glob(os.path.join(path, '*', 'masks_instances', '*', '*.png'))
+os.makedirs(save_path, exist_ok=True)
 
 for i in image_path:
-    name = i.split('\\')[-1].split('.')[0]
+    name = i.split('\\')[-2]
+    folder = i.split('\\')[-4]
+    # print(folder, name)
     img = cv2.imread(i)
     img = padding(img, 256)
-    cv2.imwrite(name, img)
+    cv2.imwrite(save_path + folder + f'{name}.png', img)
