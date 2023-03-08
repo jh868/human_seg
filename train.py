@@ -16,7 +16,7 @@ import matplotlib.pyplot as plt
 
 
 class Human(Dataset):
-    def __init__(self, path_to_img, path_to_anno, train=True, transfrom=None, transform_mask=None):
+    def __init__(self, path_to_img, path_to_anno, train=True, transfrom=None):
         self.images = sorted(glob.glob(path_to_img + '/*.jpg'))
         self.annotations = sorted(glob.glob(path_to_anno + '/*.png'))
 
@@ -66,13 +66,13 @@ device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 transform = A.Compose([
     A.Resize(width=256, height=256),
-    A.HorizontalFlip(p=0.5),
-    A.Rotate(limit=30, p=0.3),
+    # A.HorizontalFlip(p=0.5),
+    # A.Rotate(limit=30, p=0.3),
     ToTensorV2()
 ])
 
-train_set = Human(path_to_img='D:seg/image/',
-                  path_to_anno='D:seg/mask/',
+train_set = Human(path_to_img='D:seg_resize/image/',
+                  path_to_anno='D:seg_resize/mask/',
                   transfrom=transform,
                   )
 
@@ -85,7 +85,7 @@ lr = 0.001
 optim = Adam(params=model.parameters(), lr=lr)
 
 # 가중치만 불러오기
-# model.load_state_dict(torch.load('./Human_seg_full_50.pth'), strict=False)
+model.load_state_dict(torch.load('./mobilenet_v2.pth.tar'), strict=False)
 
 # load checkpoint
 # checkpoint = torch.load('./checkpoint.tar')
