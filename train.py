@@ -4,6 +4,8 @@ import torch
 from torch.utils.data.dataset import Dataset
 import tqdm
 import torch.nn as nn
+import torch.nn.functional as F
+
 
 import albumentations as A
 from albumentations.pytorch.transforms import ToTensorV2
@@ -40,13 +42,15 @@ class Human(Dataset):
         mask[mask < 255] = 0
         mask[mask == 255.0] = 1
         mask = mask.astype(np.float32)
+        # mask[mask != 1.0] = 0.0
+        # mask[mask == 1.0] = 1.0
         mask = self.transform(image=mask)['image']
 
         # mask[mask < 255] = 0
         # mask[mask == 255.0] = 1
 
         # mask = torch.tensor(mask)
-        mask = mask.squeeze()
+        # mask = mask.squeeze()
         return mask
 
     def __getitem__(self, i):
@@ -65,8 +69,8 @@ device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 transform = A.Compose([
     A.Resize(width=256, height=256),
-    # A.HorizontalFlip(p=0.5),
-    # A.Rotate(limit=30, p=0.3),
+    # A.HorizontalFlip(p=0.3),
+    # A.Rotate(limit=30, p=0.2),
     ToTensorV2()
 ])
 
@@ -83,23 +87,45 @@ lr = 0.001
 
 optim = Adam(params=model.parameters(), lr=lr)
 
+class DiceBCELoss(nn.Module):
+    def __init__(self, weight=None, size_average=True):
+        super(DiceBCELoss, self).__init__()
+
+    def forward(self, inputs, targets, smooth=1):
+        # comment out if your model contains a sigmoid or equivalent activation layer
+        inputs = torch.sigmoid(inputs)
+
+        # flatten label and prediction tensors
+        inputs = inputs.view(-1)
+        targets = targets.view(-1)
+
+        intersection = (inputs * targets).sum()
+        dice_loss = 1 - (2. * intersection + smooth) / (inputs.sum() + targets.sum() + smooth)
+        BCE = F.binary_cross_entropy(inputs, targets, reduction='mean')
+        Dice_BCE = BCE + dice_loss
+
+        return Dice_BCE
+
+dice =DiceBCELoss()
+
 # 가중치만 불러오기
-model.load_state_dict(torch.load('./mobilenet_v2.pth.tar'), strict=False)
+# model.load_state_dict(torch.load('./mobilenet_v2-7ebf99e0.pth'), strict=False)
 
 # load checkpoint
-# checkpoint = torch.load('./checkpoint.tar')
-# model.load_state_dict(checkpoint['model_state_dict'])
-# optim.load_state_dict(checkpoint['optimizer_state_dict'])
-# epoch = checkpoint['epoch']
+checkpoint = torch.load('D:pt_file/Portrait_seg_pretrain_40.pth')
+model.load_state_dict(checkpoint['model_state_dict'])
+optim.load_state_dict(checkpoint['optimizer_state_dict'])
+num_epoch = checkpoint['epoch']
 
 # train
-for epoch in range(200):
+for epoch in range(num_epoch, 20000):
     iterator = tqdm.tqdm(train_loader)
     for data, label in iterator:
         optim.zero_grad()
 
         preds = model(data.to(device))
-        loss = nn.BCEWithLogitsLoss()(preds, label.type(torch.FloatTensor).to(device))
+        # loss = nn.BCEWithLogitsLoss()(preds, label.type(torch.FloatTensor).to(device))
+        loss = dice(preds, label.type(torch.FloatTensor).to(device))
         loss.backward()
         optim.step()
 
@@ -111,7 +137,7 @@ for epoch in range(200):
             'model_state_dict': model.state_dict(),
             'optimizer_state_dict': optim.state_dict(),
             'epoch': epoch
-        }, f'Portrait_seg_{epoch + 1}.pth')
+        }, f'D:/pt_file/Portrait_seg_pretrain_{epoch + 1}.pth')
 
 torch.save({
     'model_state_dict': model.state_dict(),
