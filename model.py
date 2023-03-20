@@ -144,7 +144,7 @@ class MobileUNet(nn.Module):
         d5 = self.DConv4x4(d4)
         out = self.conv1x1_decode(d5)
 
-        # out = out.squeeze()  # 채널 제거
+        out = out.squeeze()  # 채널 제거
 
         return out
 
