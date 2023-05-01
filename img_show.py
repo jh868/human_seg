@@ -4,12 +4,20 @@ import numpy as np
 from model import MobileUNet
 import glob
 import os
+import segmentation_models_pytorch as smp
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
-model = MobileUNet().to(device)
+# model = MobileUNet().to(device)
 
-checkpoint = torch.load('./pt_file_3/Portrait_seg_pretrain_30.pth', map_location='cpu')
+model = smp.Unet(
+    encoder_name='timm-mobilenetv3_small_minimal_100',
+    encoder_weights='imagenet',
+    in_channels=3,
+    classes=1
+)
+
+checkpoint = torch.load('D:BCE/Best_BCE_Loss.pth', map_location='cpu')
 model.load_state_dict(checkpoint['model_state_dict'])
 
 path = './test/image/'
@@ -29,6 +37,8 @@ for i in img_path:
     pred = model(img_copy2.float())
     pred = pred.detach().numpy()
     pred = pred.astype(np.uint8)
+    pred = pred[0][0]
+
     # print("pred = ", pred.shape)
 
     _, mask = cv2.threshold(pred, 200, 255, cv2.THRESH_BINARY)
